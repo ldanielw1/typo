@@ -104,10 +104,10 @@ class Article < Content
     end
 
     def search_with_pagination(search_hash, paginate_hash)
-      
+
       state = (search_hash[:state] and ["no_draft", "drafts", "published", "withdrawn", "pending"].include? search_hash[:state]) ? search_hash[:state] : 'no_draft'
-      
-      
+
+
       list_function  = ["Article.#{state}"] + function_search_no_draft(search_hash)
 
       if search_hash[:category] and search_hash[:category].to_i > 0
@@ -416,6 +416,36 @@ class Article < Content
     user.admin? || user_id == user.id
   end
 
+
+  def merge_with(article_id)
+    other_article = Article.find_by_id(article_id)
+    return nil if other_article == nil
+    comments = Feedback.find_all_by_article_id(self.id)
+    other_comments = Feedback.find_all_by_article_id(other_article.id)
+
+    merged = Article.new
+    merged.title = self.title
+    merged.author = self.author
+    merged.body = self.body + other_article.body
+    merged.user_id = self.user_id
+    merged.published = true
+    merged.allow_comments = true
+    merged.save!
+
+    comments.each do |comment|
+      comment.article_id = merged.id
+      comment.save
+    end
+    other_comments.each do |comment|
+      comment.article_id = merged.id
+      comment.save
+    end
+
+    Article.destroy(article_id)
+    Article.destroy(self.id)
+    return merged
+  end
+
   protected
 
   def set_published_at
@@ -466,4 +496,5 @@ class Article < Content
     to = to - 1 # pull off 1 second so we don't overlap onto the next day
     return from..to
   end
+
 end
